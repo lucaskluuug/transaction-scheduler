@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script de Testes - Simulador de Escalonador</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .controls {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.secondary {
+            background: #2196F3;
+        }
+        button.secondary:hover {
+            background: #0b7dda;
+        }
+        .test-results {
+            display: grid;
+            gap: 1.5rem;
+        }
+        .test-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .test-header {
+            background: #2196F3;
+            color: white;
+            padding: 1rem;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .test-header.success {
+            background: #4CAF50;
+        }
+        .test-header.error {
+            background: #f44336;
+        }
+        .test-content {
+            padding: 1rem;
+        }
+        .test-input {
+            background: #f9f9f9;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            border-left: 4px solid #2196F3;
+        }
+        .test-output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: normal;
+        }
+        .status-badge.pending {
+            background: rgba(255,255,255,0.3);
+        }
+        .status-badge.success {
+            background: rgba(255,255,255,0.3);
+        }
+        .status-badge.error {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Script de Testes - Simulador de Escalonador</h1>
+        
+        <div class="controls">
+            <button onclick="executarTodosTestes()">▶️ Executar Todos os Testes</button>
+            <button class="secondary" onclick="exportarResultados()">💾 Exportar Resultados</button>
+            <button class="secondary" onclick="limparResultados()">🗑️ Limpar Resultados</button>
+        </div>
+
+        <div class="test-results" id="test-results"></div>
+    </div>
+
+    <script>
+        // Incluir a função escalonar do arquivo original
+        function escalonar(code) {
+            const db = {};
+            const transacoes = {};
+            const writeTimestamps = {};
+            const readTimestamps = {};
+            const transacoesAbortadas = new Set();
+            const transacoesReiniciadas = {};
+            
+            let resultado = [];
+            let tempo = 0;
+            
+            // Parse da história inicial
+            const linhas = code
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 0)
+                .map(l => {
+                    const parts = l.split(/\s+/);
+                    const [t, op, varName, ...rest] = parts;
+                    const val = rest.length ? rest.join(' ') : undefined;
+                    return { t, op, varName, val };
+                });
+            
+            let historiaFinal = [];
+            let filaPendentes = [...linhas];
+            let indiceAtual = 0;
+            let tentativas = 0;
+            const MAX_TENTATIVAS = 1000;
+            
+            resultado.push('=== INICIANDO ESCALONAMENTO ===\n');
+            resultado.push(`Total de operações na HI: ${linhas.length}\n\n`);
+            
+            while (indiceAtual < filaPendentes.length && tentativas < MAX_TENTATIVAS) {
+                tentativas++;
+                const linha = filaPendentes[indiceAtual];
+                const { t, op, varName, val } = linha;
+                
+                // Inicializar transação se necessário
+                if (!(t in transacoes)) {
+                    const ehReinicio = transacoesReiniciadas[t] !== undefined;
+                    
+                    transacoes[t] = {
+                        estado: 'ativa',
+                        timestamp: tempo++,
+                        memoria: {},
+                        operacoes: []
+                    };
+                    
+                    const reinicioMsg = ehReinicio ? ' (REINÍCIO após abort)' : '';
+                    resultado.push(`[NOVA TRANSAÇÃO] ${t} iniciada${reinicioMsg}\n`);
+                    resultado.push(`  TS(${t}) = ${transacoes[t].timestamp}\n\n`);
+                    
+                    if (ehReinicio) {
+                        transacoesReiniciadas[t]++;
+                    } else {
+                        transacoesReiniciadas[t] = 0;
+                    }
+                }
+                
+                const transacao = transacoes[t];
+                
+                // Pular operações de transações abortadas
+                if (transacao.estado === 'abortada') {
+                    indiceAtual++;
+                    continue;
+                }
+                
+                if (transacao.estado === 'comitada') {
+                    resultado.push(`[ERRO] Transação ${t} já está comitada\n\n`);
+                    indiceAtual++;
+                    continue;
+                }
+                
+                // Processar operação
+                let abortou = false;
+                
+                if (op === 'r') {
+                    // Inicializar variável se não existe
+                    if (!(varName in db)) {
+                        db[varName] = 0;
+                        writeTimestamps[varName] = -1;
+                        readTimestamps[varName] = -1;
+                    }
+                    
+                    resultado.push(`[LEITURA] ${t} r ${varName}\n`);
+                    
+                    // Regra do protocolo: TS(Ti) < WTS(X) -> abort
+                    if (writeTimestamps[varName] > transacao.timestamp) {
+                        abortou = true;
+                        resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < WTS(${varName})=${writeTimestamps[varName]}\n`);
+                        resultado.push(`  Motivo: Leitura tardia detectada!\n\n`);
+                    } else {
+                        // Verificar se já existe na memória local (leitura repetida)
+                        let valorLido;
+                        let origem;
+                        
+                        if (varName in transacao.memoria) {
+                            // Ler da memória local
+                            valorLido = transacao.memoria[varName];
+                            origem = 'memória local';
+                        } else {
+                            // Ler do banco de dados
+                            valorLido = db[varName];
+                            origem = 'banco de dados';
+                            transacao.memoria[varName] = valorLido;
+                            // Só atualiza RTS se for leitura do banco
+                            readTimestamps[varName] = Math.max(readTimestamps[varName], transacao.timestamp);
+                        }
+                        
+                        transacao.operacoes.push({ op: 'r', varName, valor: valorLido });
+                        historiaFinal.push({ t, op: 'r', varName, valor: valorLido });
+                        
+                        resultado.push(`  Valor lido: ${valorLido} (${origem})\n`);
+                        resultado.push(`  RTS(${varName}) = ${readTimestamps[varName]}\n\n`);
+                    }
+                } else if (op === 'w') {
+                    if (val === undefined) {
+                        resultado.push(`[ERRO] Valor não fornecido para escrita em ${t}\n\n`);
+                        indiceAtual++;
+                        continue;
+                    }
+                    
+                    // Inicializar variável se não existe
+                    if (!(varName in db)) {
+                        db[varName] = 0;
+                        writeTimestamps[varName] = -1;
+                        readTimestamps[varName] = -1;
+                    }
+                    
+                    resultado.push(`[ESCRITA] ${t} w ${varName} ${val}\n`);
+                    
+                    // Regras do protocolo para a variável sendo escrita:
+                    // TS(Ti) < RTS(X) -> abort
+                    // TS(Ti) < WTS(X) -> abort
+                    if (readTimestamps[varName] > transacao.timestamp) {
+                        abortou = true;
+                        resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < RTS(${varName})=${readTimestamps[varName]}\n`);
+                        resultado.push(`  Motivo: Escrita tardia (após leitura)!\n\n`);
+                    } else if (writeTimestamps[varName] > transacao.timestamp) {
+                        abortou = true;
+                        resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < WTS(${varName})=${writeTimestamps[varName]}\n`);
+                        resultado.push(`  Motivo: Escrita tardia (após outra escrita)!\n\n`);
+                    }
+                    
+                    if (!abortou) {
+                        // Verificar timestamps das variáveis usadas na expressão
+                        const variaveisNaExpressao = val.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+                        
+                        for (const varUsada of variaveisNaExpressao) {
+                            if (varUsada in writeTimestamps) {
+                                if (writeTimestamps[varUsada] > transacao.timestamp) {
+                                    abortou = true;
+                                    resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < WTS(${varUsada})=${writeTimestamps[varUsada]}\n`);
+                                    resultado.push(`  Motivo: Variável ${varUsada} usada na expressão foi modificada por transação mais recente!\n\n`);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!abortou) {
+                        // Calcular valor da escrita
+                        try {
+                            const valorCalculado = new Function(
+                                ...Object.keys(transacao.memoria),
+                                `return ${val};`
+                            )(...Object.values(transacao.memoria));
+                            
+                            transacao.memoria[varName] = valorCalculado;
+                            transacao.operacoes.push({ op: 'w', varName, valor: valorCalculado, expressao: val });
+                            historiaFinal.push({ t, op: 'w', varName, valor: valorCalculado, expressao: val });
+                            writeTimestamps[varName] = Math.max(writeTimestamps[varName], transacao.timestamp);
+                            
+                            resultado.push(`  Valor calculado: ${valorCalculado}\n`);
+                            resultado.push(`  WTS(${varName}) = ${writeTimestamps[varName]}\n\n`);
+                        } catch (e) {
+                            resultado.push(`  [ERRO] Erro ao calcular expressão: ${val}\n\n`);
+                            indiceAtual++;
+                            continue;
+                        }
+                    }
+                } else if (op === 'c') {
+                    resultado.push(`[COMMIT] ${t}\n`);
+                    
+                    // Commit: escrever valores das operações de escrita no banco de dados
+                    for (const operacao of transacao.operacoes) {
+                        if (operacao.op === 'w') {
+                            db[operacao.varName] = operacao.valor;
+                        }
+                    }
+                    transacao.estado = 'comitada';
+                    historiaFinal.push({ t, op: 'c' });
+                    
+                    resultado.push(`  Transação finalizada com sucesso\n\n`);
+                }
+                
+                // Se abortou, remover operações da HF e reiniciar transação
+                if (abortou) {
+                    transacao.estado = 'abortada';
+                    transacoesAbortadas.add(t);
+                    
+                    // Remover operações da transação abortada da HF
+                    historiaFinal = historiaFinal.filter(op => op.t !== t);
+                    
+                    // Resetar transação
+                    delete transacoes[t];
+                    
+                    // Coletar TODAS as operações desta transação da história inicial
+                    const todasOperacoesDestaTransacao = linhas.filter(op => op.t === t);
+                    
+                    // Remover apenas as operações desta transação que ainda não foram processadas
+                    const operacoesAntes = filaPendentes.slice(0, indiceAtual);
+                    const operacoesDepois = filaPendentes.slice(indiceAtual).filter(op => op.t !== t);
+                    filaPendentes = [...operacoesAntes, ...operacoesDepois, ...todasOperacoesDestaTransacao];
+                    
+                    resultado.push(`[REINÍCIO] Transação ${t} será reiniciada\n`);
+                    resultado.push(`  Operações removidas da HF\n`);
+                    resultado.push(`  Todas as ${todasOperacoesDestaTransacao.length} operações adicionadas ao final da fila\n\n`);
+                } else {
+                    indiceAtual++;
+                }
+            }
+            
+            if (tentativas >= MAX_TENTATIVAS) {
+                resultado.push('\n[AVISO] Limite de tentativas atingido.\n\n');
+            }
+            
+            // Gerar resultado final
+            resultado.push('\n=== HISTÓRIA FINAL (HF) ===\n');
+            
+            for (const passo of historiaFinal) {
+                if (passo.op === 'r') {
+                    resultado.push(`${passo.t} r ${passo.varName}\n`);
+                } else if (passo.op === 'w') {
+                    resultado.push(`${passo.t} w ${passo.varName} ${passo.expressao}\n`);
+                } else if (passo.op === 'c') {
+                    resultado.push(`${passo.t} c\n`);
+                }
+            }
+            
+            resultado.push('\n=== ESTADO FINAL DO BANCO DE DADOS ===\n');
+            for (const [varName, value] of Object.entries(db)) {
+                resultado.push(`${varName} = ${value}\n`);
+            }
+            
+            resultado.push('\n=== INFORMAÇÕES DAS TRANSAÇÕES ===\n');
+            for (const [t, transacao] of Object.entries(transacoes)) {
+                resultado.push(`${t}: ${transacao.estado} (TS=${transacao.timestamp})\n`);
+            }
+            
+            if (transacoesAbortadas.size > 0) {
+                resultado.push('\n=== TRANSAÇÕES QUE ABORTARAM ===\n');
+                for (const t of transacoesAbortadas) {
+                    const reiniciosCount = transacoesReiniciadas[t] || 0;
+                    resultado.push(`${t} - ${reiniciosCount} reinício(s)\n`);
+                }
+            }
+            
+            return resultado.join('');
+        }
+
+        // Definição dos testes
+        const testes = [
+            {
+                id: 1,
+                nota: "Duas transações leem X e depois tentam escrever nele",
+                codigo: `t1 r X
+t2 r X
+t1 w X (X + 10)
+t2 w X (X + 20)
+t1 c
+t2 c`
+            },
+            {
+                id: 2,
+                nota: "Escritas diretas em A e B sem leituras prévias",
+                codigo: `t1 w A 100
+t2 w A 200
+t1 w B 50
+t2 w B 75
+t1 c
+t2 c`
+            },
+            {
+                id: 3,
+                nota: "t1 escreve X e comita, depois t2 lê X e escreve Y",
+                codigo: `t1 w X 100
+t1 c
+t2 r X
+t2 w Y (X + 50)
+t2 c`
+            },
+            {
+                id: 4,
+                nota: "Cadeia de dependências: t1 modifica A, t2 lê A e escreve B, t3 lê B e escreve C",
+                codigo: `t1 r A
+t1 w A (A + 10)
+t2 r A
+t2 w B (A + 20)
+t3 r B
+t3 w C (B + 30)
+t1 c
+t2 c
+t3 c`
+            },
+            {
+                id: 5,
+                nota: "t2 escreve e comita X antes de t1 tentar ler",
+                codigo: `t2 w X 100
+t2 c
+t1 r X
+t1 c`
+            },
+            {
+                id: 6,
+                nota: "t2 lê X antes de t1 tentar escrever nele",
+                codigo: `t2 r X
+t1 w X 100
+t2 w Y (X + 10)
+t1 c
+t2 c`
+            },
+            {
+                id: 7,
+                nota: "Cenário de transferência bancária: t1 transfere 200 de A para B, t2 calcula total",
+                codigo: `t0 w CONTA_A 1000
+t0 w CONTA_B 500
+t0 c
+t1 r CONTA_A
+t1 w CONTA_A (CONTA_A - 200)
+t1 r CONTA_B
+t1 w CONTA_B (CONTA_B + 200)
+t1 c
+t2 r CONTA_A
+t2 r CONTA_B
+t2 w TOTAL (CONTA_A + CONTA_B)
+t2 c`
+            },
+            {
+                id: 8,
+                nota: "Três transações leem X, t2 e t3 escrevem e comitam antes de t1 escrever",
+                codigo: `t1 r X
+t2 r X
+t3 r X
+t2 w X (X + 10)
+t2 c
+t3 w X (X + 20)
+t3 c
+t1 w X (X + 5)
+t1 c`
+            },
+            {
+                id: 9,
+                nota: "Três transações tentam incrementar o mesmo contador concorrentemente",
+                codigo: `t0 w CONTADOR 0
+t0 c
+t1 r CONTADOR
+t2 r CONTADOR
+t3 r CONTADOR
+t1 w CONTADOR (CONTADOR + 1)
+t2 w CONTADOR (CONTADOR + 1)
+t3 w CONTADOR (CONTADOR + 1)
+t1 c
+t2 c
+t3 c`
+            },
+            {
+                id: 10,
+                nota: "t1 calcula soma de três valores, t2 incrementa VAL1 e VAL2, t3 calcula média",
+                codigo: `t0 w VAL1 10
+t0 w VAL2 20
+t0 w VAL3 30
+t0 c
+t1 r VAL1
+t1 r VAL2
+t1 r VAL3
+t1 w SOMA (VAL1 + VAL2 + VAL3)
+t1 c
+t2 r VAL1
+t2 w VAL1 (VAL1 + 5)
+t2 r VAL2
+t2 w VAL2 (VAL2 + 5)
+t2 c
+t3 r SOMA
+t3 r VAL1
+t3 w MEDIA (SOMA / 3)
+t3 c`
+            },
+            {
+                id: 11,
+                nota: "Três transações escrevem diretamente em X sem ler antes",
+                codigo: `t1 w X 100
+t2 w X 200
+t3 w X 300
+t1 c
+t2 c
+t3 c`
+            },
+            {
+                id: 12,
+                nota: "Dependência circular: t1 lê X e escreve Y, t2 lê Y e escreve X",
+                codigo: `t1 r X
+t2 r Y
+t1 w Y 100
+t2 w X 200
+t1 c
+t2 c`
+            },
+            {
+                id: 13,
+                nota: "Três transações leem diferentes combinações de A, B, C e escrevem D, E, F",
+                codigo: `t1 r A
+t1 r B
+t2 r B
+t2 r C
+t3 r C
+t3 r A
+t1 w D (A + B)
+t2 w E (B + C)
+t3 w F (C + A)
+t1 c
+t2 c
+t3 c`
+            },
+            {
+                id: 14,
+                nota: "t1 lê PRECO, t2 modifica PRECO e cria TAXA, depois t1 tenta usar ambos",
+                codigo: `t0 w PRECO 100
+t0 c
+t1 r PRECO
+t2 r PRECO
+t2 w PRECO (PRECO + 50)
+t2 w TAXA 10
+t2 c
+t1 r TAXA
+t1 w TOTAL (PRECO + TAXA)
+t1 c`
+            },
+            {
+                id: 15,
+                nota: "t1 lê e escreve X múltiplas vezes (testa memória local), depois t2 lê X",
+                codigo: `t1 r X
+t1 w X (X + 10)
+t1 r X
+t1 w X (X * 2)
+t1 c
+t2 r X
+t2 w Y (X + 5)
+t2 c`
+            },
+            {
+                id: 16,
+                nota: "Três transações leem A, depois escrevem em B, A e C respectivamente",
+                codigo: `t1 r A
+t2 r A
+t3 r A
+t1 w B (A + 10)
+t2 w A (A + 20)
+t3 w C (A + 30)
+t1 c
+t2 c
+t3 c`
+            },
+            {
+                id: 17,
+                nota: "Três transações calculam diferentes expressões matemáticas com X, Y, Z",
+                codigo: `t0 w X 10
+t0 w Y 20
+t0 w Z 30
+t0 c
+t1 r X
+t1 r Y
+t1 w RESULT1 (X * Y + 100)
+t1 c
+t2 r Y
+t2 r Z
+t2 w RESULT2 ((Y + Z) * 2)
+t2 c
+t3 r X
+t3 r Z
+t3 w RESULT3 (X * 10 - Z)
+t3 c`
+            },
+            {
+                id: 18,
+                nota: "t2 lê e comita X antes de t1 tentar escrever",
+                codigo: `t2 r X
+t2 c
+t1 w X 100
+t1 c`
+            },
+            {
+                id: 19,
+                nota: "t2 escreve e comita X antes de t1 tentar ler",
+                codigo: `t2 w X 100
+t2 c
+t1 r X
+t1 c`
+            },
+            {
+                id: 20,
+                nota: "Três transações isoladas operando em variáveis diferentes (A, B, C)",
+                codigo: `t1 r A
+t1 w A (A + 10)
+t1 c
+t2 r B
+t2 w B (B + 20)
+t2 c
+t3 r C
+t3 w C (C + 30)
+t3 c`
+            }
+        ];
+
+        function executarTodosTestes() {
+            const resultsContainer = document.getElementById('test-results');
+            resultsContainer.innerHTML = '';
+            
+            testes.forEach((teste, index) => {
+                try {
+                    const output = escalonar(teste.codigo);
+                    const card = criarCardTeste(teste, output, 'success');
+                    resultsContainer.appendChild(card);
+                } catch (error) {
+                    const card = criarCardTeste(teste, `ERRO: ${error.message}\n\n${error.stack}`, 'error');
+                    resultsContainer.appendChild(card);
+                }
+            });
+        }
+
+        function criarCardTeste(teste, output, status) {
+            const card = document.createElement('div');
+            card.className = 'test-card';
+            
+            const header = document.createElement('div');
+            header.className = `test-header ${status}`;
+            header.innerHTML = `
+                <span>Teste ${teste.id}</span>
+                <span class="status-badge ${status}">${status === 'success' ? '✓ Executado' : '✗ Erro'}</span>
+            `;
+            
+            const content = document.createElement('div');
+            content.className = 'test-content';
+            
+            if (teste.nota) {
+                const nota = document.createElement('div');
+                nota.style.cssText = 'margin-bottom: 1rem; color: #666; font-style: italic; font-size: 0.9rem;';
+                nota.textContent = teste.nota;
+                content.appendChild(nota);
+            }
+            
+            const inputDiv = document.createElement('div');
+            inputDiv.className = 'test-input';
+            inputDiv.textContent = teste.codigo;
+            
+            const outputDiv = document.createElement('div');
+            outputDiv.className = 'test-output';
+            outputDiv.textContent = output;
+            
+            content.appendChild(inputDiv);
+            content.appendChild(outputDiv);
+            
+            card.appendChild(header);
+            card.appendChild(content);
+            
+            return card;
+        }
+
+        function exportarResultados() {
+            let conteudo = '=== RESULTADOS DOS TESTES - SIMULADOR DE ESCALONADOR ===\n\n';
+            conteudo += `Data: ${new Date().toLocaleString('pt-BR')}\n\n`;
+            conteudo += '='.repeat(80) + '\n\n';
+            
+            testes.forEach((teste, index) => {
+                try {
+                    const output = escalonar(teste.codigo);
+                    conteudo += `TESTE ${teste.id}\n`;
+                    conteudo += '-'.repeat(80) + '\n';
+                    if (teste.nota) {
+                        conteudo += `Nota: ${teste.nota}\n\n`;
+                    }
+                    conteudo += `HISTÓRIA INICIAL (HI):\n${teste.codigo}\n\n`;
+                    conteudo += `RESULTADO:\n${output}\n\n`;
+                    conteudo += '='.repeat(80) + '\n\n';
+                } catch (error) {
+                    conteudo += `TESTE ${teste.id}\n`;
+                    conteudo += '-'.repeat(80) + '\n';
+                    conteudo += `ERRO: ${error.message}\n\n`;
+                    conteudo += '='.repeat(80) + '\n\n';
+                }
+            });
+            
+            const blob = new Blob([conteudo], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resultados_testes_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function limparResultados() {
+            document.getElementById('test-results').innerHTML = '';
+        }
+
+        // Executar automaticamente ao carregar
+        window.addEventListener('load', () => {
+            console.log('Script de testes carregado. Clique em "Executar Todos os Testes" para começar.');
+        });
+    </script>
+</body>
+</html>
+

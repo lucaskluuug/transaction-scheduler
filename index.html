@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simulador de Escalonador</title>
+  </head>
+  <body>
+    <form action="">
+      <label for="codigo">História inicial</label>
+      <textarea name="codigo" id="codigo"></textarea>
+      <button type="submit">Escalonar</button>
+    </form>
+    <pre id="result"></pre>
+
+    <script>
+      function escalonar(code) {
+        const db = {};
+        const transacoes = {};
+        const writeTimestamps = {};
+        const readTimestamps = {};
+        const transacoesAbortadas = new Set();
+        const transacoesReiniciadas = {};
+        
+        let resultado = [];
+        let tempo = 0;
+        
+        const linhas = code
+            .split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0)
+            .map(l => {
+                const parts = l.split(/\s+/);
+                const [t, op, varName, ...rest] = parts;
+                const val = rest.length ? rest.join(' ') : undefined;
+                return { t, op, varName, val };
+            });
+        
+        let historiaFinal = [];
+        let filaPendentes = [...linhas];
+        let indiceAtual = 0;
+        let tentativas = 0;
+        const MAX_TENTATIVAS = 1000;
+        
+        resultado.push('=== INICIANDO ESCALONAMENTO ===\n');
+        resultado.push(`Total de operações na HI: ${linhas.length}\n\n`);
+        
+        while (indiceAtual < filaPendentes.length && tentativas < MAX_TENTATIVAS) {
+            tentativas++;
+            const linha = filaPendentes[indiceAtual];
+            const { t, op, varName, val } = linha;
+            
+            if (!(t in transacoes)) {
+                const ehReinicio = transacoesReiniciadas[t] !== undefined;
+                
+                transacoes[t] = {
+                    estado: 'ativa',
+                    timestamp: tempo++,
+                    memoria: {},
+                    operacoes: []
+                };
+                
+                const reinicioMsg = ehReinicio ? ' (REINÍCIO após abort)' : '';
+                resultado.push(`[NOVA TRANSAÇÃO] ${t} iniciada${reinicioMsg}\n`);
+                resultado.push(`  TS(${t}) = ${transacoes[t].timestamp}\n\n`);
+                
+                if (ehReinicio) {
+                    transacoesReiniciadas[t]++;
+                } else {
+                    transacoesReiniciadas[t] = 0;
+                }
+            }
+            
+            const transacao = transacoes[t];
+            
+            if (transacao.estado === 'abortada') {
+                indiceAtual++;
+                continue;
+            }
+            
+            if (transacao.estado === 'comitada') {
+                resultado.push(`[ERRO] Transação ${t} já está comitada\n\n`);
+                indiceAtual++;
+                continue;
+            }
+            
+            let abortou = false;
+            
+            if (op === 'r') {
+                if (!(varName in db)) {
+                    db[varName] = 0;
+                    writeTimestamps[varName] = -1;
+                    readTimestamps[varName] = -1;
+                }
+                
+                resultado.push(`[LEITURA] ${t} r ${varName}\n`);
+                
+                if (writeTimestamps[varName] > transacao.timestamp) {
+                    abortou = true;
+                    resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < WTS(${varName})=${writeTimestamps[varName]}\n`);
+                    resultado.push(`  Motivo: Leitura tardia detectada!\n\n`);
+                } else {
+                    let valorLido;
+                    let origem;
+                    
+                    if (varName in transacao.memoria) {
+                        valorLido = transacao.memoria[varName];
+                        origem = 'memória local';
+                    } else {
+                        valorLido = db[varName];
+                        origem = 'banco de dados';
+                        transacao.memoria[varName] = valorLido;
+                        readTimestamps[varName] = Math.max(readTimestamps[varName], transacao.timestamp);
+                    }
+                    
+                    transacao.operacoes.push({ op: 'r', varName, valor: valorLido });
+                    historiaFinal.push({ t, op: 'r', varName, valor: valorLido });
+                    
+                    resultado.push(`  Valor lido: ${valorLido} (${origem})\n`);
+                    resultado.push(`  RTS(${varName}) = ${readTimestamps[varName]}\n\n`);
+                }
+            } else if (op === 'w') {
+                if (val === undefined) {
+                    resultado.push(`[ERRO] Valor não fornecido para escrita em ${t}\n\n`);
+                    indiceAtual++;
+                    continue;
+                }
+                
+                if (!(varName in db)) {
+                    db[varName] = 0;
+                    writeTimestamps[varName] = -1;
+                    readTimestamps[varName] = -1;
+                }
+                
+                resultado.push(`[ESCRITA] ${t} w ${varName} ${val}\n`);
+                
+                if (readTimestamps[varName] > transacao.timestamp) {
+                    abortou = true;
+                    resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < RTS(${varName})=${readTimestamps[varName]}\n`);
+                    resultado.push(`  Motivo: Escrita tardia (após leitura)!\n\n`);
+                } else if (writeTimestamps[varName] > transacao.timestamp) {
+                    abortou = true;
+                    resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < WTS(${varName})=${writeTimestamps[varName]}\n`);
+                    resultado.push(`  Motivo: Escrita tardia (após outra escrita)!\n\n`);
+                }
+                
+                if (!abortou) {
+                    const variaveisNaExpressao = val.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+                    
+                    for (const varUsada of variaveisNaExpressao) {
+                        if (varUsada in writeTimestamps) {
+                            if (writeTimestamps[varUsada] > transacao.timestamp) {
+                                abortou = true;
+                                resultado.push(`  ABORT: TS(${t})=${transacao.timestamp} < WTS(${varUsada})=${writeTimestamps[varUsada]}\n`);
+                                resultado.push(`  Motivo: Variável ${varUsada} usada na expressão foi modificada por transação mais recente!\n\n`);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!abortou) {
+                    try {
+                        const valorCalculado = new Function(
+                            ...Object.keys(transacao.memoria),
+                            `return ${val};`
+                        )(...Object.values(transacao.memoria));
+                        
+                        transacao.memoria[varName] = valorCalculado;
+                        transacao.operacoes.push({ op: 'w', varName, valor: valorCalculado, expressao: val });
+                        historiaFinal.push({ t, op: 'w', varName, valor: valorCalculado, expressao: val });
+                        writeTimestamps[varName] = Math.max(writeTimestamps[varName], transacao.timestamp);
+                        
+                        resultado.push(`  Valor calculado: ${valorCalculado}\n`);
+                        resultado.push(`  WTS(${varName}) = ${writeTimestamps[varName]}\n\n`);
+                    } catch (e) {
+                        resultado.push(`  [ERRO] Erro ao calcular expressão: ${val}\n\n`);
+                        indiceAtual++;
+                        continue;
+                    }
+                }
+            } else if (op === 'c') {
+                resultado.push(`[COMMIT] ${t}\n`);
+                
+                for (const operacao of transacao.operacoes) {
+                    if (operacao.op === 'w') {
+                        db[operacao.varName] = operacao.valor;
+                    }
+                }
+                transacao.estado = 'comitada';
+                historiaFinal.push({ t, op: 'c' });
+                
+                resultado.push(`  Transação finalizada com sucesso\n\n`);
+            }
+            
+            if (abortou) {
+                transacao.estado = 'abortada';
+                transacoesAbortadas.add(t);
+                
+                historiaFinal = historiaFinal.filter(op => op.t !== t);
+                
+                delete transacoes[t];
+                
+                const todasOperacoesDestaTransacao = linhas.filter(op => op.t === t);
+                
+                const operacoesAntes = filaPendentes.slice(0, indiceAtual);
+                const operacoesDepois = filaPendentes.slice(indiceAtual).filter(op => op.t !== t);
+                filaPendentes = [...operacoesAntes, ...operacoesDepois, ...todasOperacoesDestaTransacao];
+                
+                resultado.push(`[REINÍCIO] Transação ${t} será reiniciada\n`);
+                resultado.push(`  Operações removidas da HF\n`);
+                resultado.push(`  Todas as ${todasOperacoesDestaTransacao.length} operações adicionadas ao final da fila\n\n`);
+            } else {
+                indiceAtual++;
+            }
+        }
+        
+        if (tentativas >= MAX_TENTATIVAS) {
+            resultado.push('\n[AVISO] Limite de tentativas atingido.\n\n');
+        }
+        
+        resultado.push('\n=== HISTÓRIA FINAL (HF) ===\n');
+        
+        for (const passo of historiaFinal) {
+            if (passo.op === 'r') {
+                resultado.push(`${passo.t} r ${passo.varName}\n`);
+            } else if (passo.op === 'w') {
+                resultado.push(`${passo.t} w ${passo.varName} ${passo.expressao}\n`);
+            } else if (passo.op === 'c') {
+                resultado.push(`${passo.t} c\n`);
+            }
+        }
+        
+        resultado.push('\n=== ESTADO FINAL DO BANCO DE DADOS ===\n');
+        for (const [varName, value] of Object.entries(db)) {
+            resultado.push(`${varName} = ${value}\n`);
+        }
+        
+        resultado.push('\n=== INFORMAÇÕES DAS TRANSAÇÕES ===\n');
+        for (const [t, transacao] of Object.entries(transacoes)) {
+            resultado.push(`${t}: ${transacao.estado} (TS=${transacao.timestamp})\n`);
+        }
+        
+        if (transacoesAbortadas.size > 0) {
+            resultado.push('\n=== TRANSAÇÕES QUE ABORTARAM ===\n');
+            for (const t of transacoesAbortadas) {
+                const reiniciosCount = transacoesReiniciadas[t] || 0;
+                resultado.push(`${t} - ${reiniciosCount} reinício(s)\n`);
+            }
+        }
+        
+        return resultado.join('');
+      }
+    </script>
+
+    <script>
+      document.querySelector("form").onsubmit = (e) => {
+        e.preventDefault();
+        const code = document.querySelector("#codigo").value;
+        try {
+          const hf = escalonar(code);
+          document.querySelector("#result").textContent = hf;
+        } catch (err) {
+          document.querySelector("#result").textContent = err.message;
+        }
+      };
+
+      // Exemplo de código:
+      document.querySelector("#codigo").value = `t0 w A 100
+t0 w B 200
+t0 c
+
+t1 r B
+t2 r B
+t2 w B (B - 50)
+t1 r A
+t2 r A
+t1 w SUM1 (A + B)
+t1 c
+t2 w A (A + 50)
+t2 w SUM2 (A + B)
+t2 c`;
+    </script>
+
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 2rem;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: 1fr 1fr;
+        height: 100svh;
+        box-sizing: border-box;
+      }
+      textarea {
+        width: 100%;
+        height: 100%;
+        resize: none;
+        font-family: monospace;
+        font-size: 1rem;
+      }
+      pre {
+        background: #eee;
+        padding: 1rem;
+        font-family: monospace;
+        font-size: 1rem;
+        overflow: auto;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      button {
+        width: max-content;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+      }
+      label {
+        font-weight: bold;
+      }
+    </style>
+  </body>
+</html>

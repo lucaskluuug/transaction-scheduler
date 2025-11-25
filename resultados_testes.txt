@@ -1,0 +1,1789 @@
+=== RESULTADOS DOS TESTES - SIMULADOR DE ESCALONADOR ===
+
+Data: 19/11/2025, 21:48:43
+
+================================================================================
+
+TESTE 1
+--------------------------------------------------------------------------------
+Nota: Duas transações leem X e depois tentam escrever nele
+
+HISTÓRIA INICIAL (HI):
+t1 r X
+t2 r X
+t1 w X (X + 10)
+t2 w X (X + 20)
+t1 c
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 6
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 1
+
+[ESCRITA] t1 w X (X + 10)
+  ABORT: TS(t1)=0 < RTS(X)=1
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t1 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[ESCRITA] t2 w X (X + 20)
+  Valor calculado: 20
+  WTS(X) = 1
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada (REINÍCIO após abort)
+  TS(t1) = 2
+
+[LEITURA] t1 r X
+  Valor lido: 20 (banco de dados)
+  RTS(X) = 2
+
+[ESCRITA] t1 w X (X + 10)
+  Valor calculado: 30
+  WTS(X) = 2
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t2 r X
+t2 w X (X + 20)
+t2 c
+t1 r X
+t1 w X (X + 10)
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 30
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t2: comitada (TS=1)
+t1: comitada (TS=2)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t1 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 2
+--------------------------------------------------------------------------------
+Nota: Escritas diretas em A e B sem leituras prévias
+
+HISTÓRIA INICIAL (HI):
+t1 w A 100
+t2 w A 200
+t1 w B 50
+t2 w B 75
+t1 c
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 6
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[ESCRITA] t1 w A 100
+  Valor calculado: 100
+  WTS(A) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[ESCRITA] t2 w A 200
+  Valor calculado: 200
+  WTS(A) = 1
+
+[ESCRITA] t1 w B 50
+  Valor calculado: 50
+  WTS(B) = 0
+
+[ESCRITA] t2 w B 75
+  Valor calculado: 75
+  WTS(B) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 w A 100
+t2 w A 200
+t1 w B 50
+t2 w B 75
+t1 c
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+A = 200
+B = 75
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+
+
+================================================================================
+
+TESTE 3
+--------------------------------------------------------------------------------
+Nota: t1 escreve X e comita, depois t2 lê X e escreve Y
+
+HISTÓRIA INICIAL (HI):
+t1 w X 100
+t1 c
+t2 r X
+t2 w Y (X + 50)
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 5
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[ESCRITA] t1 w X 100
+  Valor calculado: 100
+  WTS(X) = 0
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r X
+  Valor lido: 100 (banco de dados)
+  RTS(X) = 1
+
+[ESCRITA] t2 w Y (X + 50)
+  Valor calculado: 150
+  WTS(Y) = 1
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 w X 100
+t1 c
+t2 r X
+t2 w Y (X + 50)
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 100
+Y = 150
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+
+
+================================================================================
+
+TESTE 4
+--------------------------------------------------------------------------------
+Nota: Cadeia de dependências: t1 modifica A, t2 lê A e escreve B, t3 lê B e escreve C
+
+HISTÓRIA INICIAL (HI):
+t1 r A
+t1 w A (A + 10)
+t2 r A
+t2 w B (A + 20)
+t3 r B
+t3 w C (B + 30)
+t1 c
+t2 c
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 9
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 0
+
+[ESCRITA] t1 w A (A + 10)
+  Valor calculado: 10
+  WTS(A) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 1
+
+[ESCRITA] t2 w B (A + 20)
+  Valor calculado: 20
+  WTS(B) = 1
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 2
+
+[LEITURA] t3 r B
+  Valor lido: 0 (banco de dados)
+  RTS(B) = 2
+
+[ESCRITA] t3 w C (B + 30)
+  Valor calculado: 30
+  WTS(C) = 2
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 r A
+t1 w A (A + 10)
+t2 r A
+t2 w B (A + 20)
+t3 r B
+t3 w C (B + 30)
+t1 c
+t2 c
+t3 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+A = 10
+B = 20
+C = 30
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+t3: comitada (TS=2)
+
+
+================================================================================
+
+TESTE 5
+--------------------------------------------------------------------------------
+Nota: t2 escreve e comita X antes de t1 tentar ler
+
+HISTÓRIA INICIAL (HI):
+t2 w X 100
+t2 c
+t1 r X
+t1 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 4
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 0
+
+[ESCRITA] t2 w X 100
+  Valor calculado: 100
+  WTS(X) = 0
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r X
+  Valor lido: 100 (banco de dados)
+  RTS(X) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t2 w X 100
+t2 c
+t1 r X
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 100
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t2: comitada (TS=0)
+t1: comitada (TS=1)
+
+
+================================================================================
+
+TESTE 6
+--------------------------------------------------------------------------------
+Nota: t2 lê X antes de t1 tentar escrever nele
+
+HISTÓRIA INICIAL (HI):
+t2 r X
+t1 w X 100
+t2 w Y (X + 10)
+t1 c
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 5
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 0
+
+[LEITURA] t2 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 0
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[ESCRITA] t1 w X 100
+  Valor calculado: 100
+  WTS(X) = 1
+
+[ESCRITA] t2 w Y (X + 10)
+  ABORT: TS(t2)=0 < WTS(X)=1
+  Motivo: Variável X usada na expressão foi modificada por transação mais recente!
+
+[REINÍCIO] Transação t2 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada (REINÍCIO após abort)
+  TS(t2) = 2
+
+[LEITURA] t2 r X
+  Valor lido: 100 (banco de dados)
+  RTS(X) = 2
+
+[ESCRITA] t2 w Y (X + 10)
+  Valor calculado: 110
+  WTS(Y) = 2
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 w X 100
+t1 c
+t2 r X
+t2 w Y (X + 10)
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 100
+Y = 110
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=1)
+t2: comitada (TS=2)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t2 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 7
+--------------------------------------------------------------------------------
+Nota: Cenário de transferência bancária: t1 transfere 200 de A para B, t2 calcula total
+
+HISTÓRIA INICIAL (HI):
+t0 w CONTA_A 1000
+t0 w CONTA_B 500
+t0 c
+t1 r CONTA_A
+t1 w CONTA_A (CONTA_A - 200)
+t1 r CONTA_B
+t1 w CONTA_B (CONTA_B + 200)
+t1 c
+t2 r CONTA_A
+t2 r CONTA_B
+t2 w TOTAL (CONTA_A + CONTA_B)
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 12
+
+[NOVA TRANSAÇÃO] t0 iniciada
+  TS(t0) = 0
+
+[ESCRITA] t0 w CONTA_A 1000
+  Valor calculado: 1000
+  WTS(CONTA_A) = 0
+
+[ESCRITA] t0 w CONTA_B 500
+  Valor calculado: 500
+  WTS(CONTA_B) = 0
+
+[COMMIT] t0
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r CONTA_A
+  Valor lido: 1000 (banco de dados)
+  RTS(CONTA_A) = 1
+
+[ESCRITA] t1 w CONTA_A (CONTA_A - 200)
+  Valor calculado: 800
+  WTS(CONTA_A) = 1
+
+[LEITURA] t1 r CONTA_B
+  Valor lido: 500 (banco de dados)
+  RTS(CONTA_B) = 1
+
+[ESCRITA] t1 w CONTA_B (CONTA_B + 200)
+  Valor calculado: 700
+  WTS(CONTA_B) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 2
+
+[LEITURA] t2 r CONTA_A
+  Valor lido: 800 (banco de dados)
+  RTS(CONTA_A) = 2
+
+[LEITURA] t2 r CONTA_B
+  Valor lido: 700 (banco de dados)
+  RTS(CONTA_B) = 2
+
+[ESCRITA] t2 w TOTAL (CONTA_A + CONTA_B)
+  Valor calculado: 1500
+  WTS(TOTAL) = 2
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t0 w CONTA_A 1000
+t0 w CONTA_B 500
+t0 c
+t1 r CONTA_A
+t1 w CONTA_A (CONTA_A - 200)
+t1 r CONTA_B
+t1 w CONTA_B (CONTA_B + 200)
+t1 c
+t2 r CONTA_A
+t2 r CONTA_B
+t2 w TOTAL (CONTA_A + CONTA_B)
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+CONTA_A = 800
+CONTA_B = 700
+TOTAL = 1500
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t0: comitada (TS=0)
+t1: comitada (TS=1)
+t2: comitada (TS=2)
+
+
+================================================================================
+
+TESTE 8
+--------------------------------------------------------------------------------
+Nota: Três transações leem X, t2 e t3 escrevem e comitam antes de t1 escrever
+
+HISTÓRIA INICIAL (HI):
+t1 r X
+t2 r X
+t3 r X
+t2 w X (X + 10)
+t2 c
+t3 w X (X + 20)
+t3 c
+t1 w X (X + 5)
+t1 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 9
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 1
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 2
+
+[LEITURA] t3 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 2
+
+[ESCRITA] t2 w X (X + 10)
+  ABORT: TS(t2)=1 < RTS(X)=2
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t2 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[ESCRITA] t3 w X (X + 20)
+  Valor calculado: 20
+  WTS(X) = 2
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+[ESCRITA] t1 w X (X + 5)
+  ABORT: TS(t1)=0 < RTS(X)=2
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t1 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[NOVA TRANSAÇÃO] t2 iniciada (REINÍCIO após abort)
+  TS(t2) = 3
+
+[LEITURA] t2 r X
+  Valor lido: 20 (banco de dados)
+  RTS(X) = 3
+
+[ESCRITA] t2 w X (X + 10)
+  Valor calculado: 30
+  WTS(X) = 3
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada (REINÍCIO após abort)
+  TS(t1) = 4
+
+[LEITURA] t1 r X
+  Valor lido: 30 (banco de dados)
+  RTS(X) = 4
+
+[ESCRITA] t1 w X (X + 5)
+  Valor calculado: 35
+  WTS(X) = 4
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t3 r X
+t3 w X (X + 20)
+t3 c
+t2 r X
+t2 w X (X + 10)
+t2 c
+t1 r X
+t1 w X (X + 5)
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 35
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t3: comitada (TS=2)
+t2: comitada (TS=3)
+t1: comitada (TS=4)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t2 - 1 reinício(s)
+t1 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 9
+--------------------------------------------------------------------------------
+Nota: Três transações tentam incrementar o mesmo contador concorrentemente
+
+HISTÓRIA INICIAL (HI):
+t0 w CONTADOR 0
+t0 c
+t1 r CONTADOR
+t2 r CONTADOR
+t3 r CONTADOR
+t1 w CONTADOR (CONTADOR + 1)
+t2 w CONTADOR (CONTADOR + 1)
+t3 w CONTADOR (CONTADOR + 1)
+t1 c
+t2 c
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 11
+
+[NOVA TRANSAÇÃO] t0 iniciada
+  TS(t0) = 0
+
+[ESCRITA] t0 w CONTADOR 0
+  Valor calculado: 0
+  WTS(CONTADOR) = 0
+
+[COMMIT] t0
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r CONTADOR
+  Valor lido: 0 (banco de dados)
+  RTS(CONTADOR) = 1
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 2
+
+[LEITURA] t2 r CONTADOR
+  Valor lido: 0 (banco de dados)
+  RTS(CONTADOR) = 2
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 3
+
+[LEITURA] t3 r CONTADOR
+  Valor lido: 0 (banco de dados)
+  RTS(CONTADOR) = 3
+
+[ESCRITA] t1 w CONTADOR (CONTADOR + 1)
+  ABORT: TS(t1)=1 < RTS(CONTADOR)=3
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t1 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[ESCRITA] t2 w CONTADOR (CONTADOR + 1)
+  ABORT: TS(t2)=2 < RTS(CONTADOR)=3
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t2 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[ESCRITA] t3 w CONTADOR (CONTADOR + 1)
+  Valor calculado: 1
+  WTS(CONTADOR) = 3
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada (REINÍCIO após abort)
+  TS(t1) = 4
+
+[LEITURA] t1 r CONTADOR
+  Valor lido: 1 (banco de dados)
+  RTS(CONTADOR) = 4
+
+[ESCRITA] t1 w CONTADOR (CONTADOR + 1)
+  Valor calculado: 2
+  WTS(CONTADOR) = 4
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada (REINÍCIO após abort)
+  TS(t2) = 5
+
+[LEITURA] t2 r CONTADOR
+  Valor lido: 2 (banco de dados)
+  RTS(CONTADOR) = 5
+
+[ESCRITA] t2 w CONTADOR (CONTADOR + 1)
+  Valor calculado: 3
+  WTS(CONTADOR) = 5
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t0 w CONTADOR 0
+t0 c
+t3 r CONTADOR
+t3 w CONTADOR (CONTADOR + 1)
+t3 c
+t1 r CONTADOR
+t1 w CONTADOR (CONTADOR + 1)
+t1 c
+t2 r CONTADOR
+t2 w CONTADOR (CONTADOR + 1)
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+CONTADOR = 3
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t0: comitada (TS=0)
+t3: comitada (TS=3)
+t1: comitada (TS=4)
+t2: comitada (TS=5)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t1 - 1 reinício(s)
+t2 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 10
+--------------------------------------------------------------------------------
+Nota: t1 calcula soma de três valores, t2 incrementa VAL1 e VAL2, t3 calcula média
+
+HISTÓRIA INICIAL (HI):
+t0 w VAL1 10
+t0 w VAL2 20
+t0 w VAL3 30
+t0 c
+t1 r VAL1
+t1 r VAL2
+t1 r VAL3
+t1 w SOMA (VAL1 + VAL2 + VAL3)
+t1 c
+t2 r VAL1
+t2 w VAL1 (VAL1 + 5)
+t2 r VAL2
+t2 w VAL2 (VAL2 + 5)
+t2 c
+t3 r SOMA
+t3 r VAL1
+t3 w MEDIA (SOMA / 3)
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 18
+
+[NOVA TRANSAÇÃO] t0 iniciada
+  TS(t0) = 0
+
+[ESCRITA] t0 w VAL1 10
+  Valor calculado: 10
+  WTS(VAL1) = 0
+
+[ESCRITA] t0 w VAL2 20
+  Valor calculado: 20
+  WTS(VAL2) = 0
+
+[ESCRITA] t0 w VAL3 30
+  Valor calculado: 30
+  WTS(VAL3) = 0
+
+[COMMIT] t0
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r VAL1
+  Valor lido: 10 (banco de dados)
+  RTS(VAL1) = 1
+
+[LEITURA] t1 r VAL2
+  Valor lido: 20 (banco de dados)
+  RTS(VAL2) = 1
+
+[LEITURA] t1 r VAL3
+  Valor lido: 30 (banco de dados)
+  RTS(VAL3) = 1
+
+[ESCRITA] t1 w SOMA (VAL1 + VAL2 + VAL3)
+  Valor calculado: 60
+  WTS(SOMA) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 2
+
+[LEITURA] t2 r VAL1
+  Valor lido: 10 (banco de dados)
+  RTS(VAL1) = 2
+
+[ESCRITA] t2 w VAL1 (VAL1 + 5)
+  Valor calculado: 15
+  WTS(VAL1) = 2
+
+[LEITURA] t2 r VAL2
+  Valor lido: 20 (banco de dados)
+  RTS(VAL2) = 2
+
+[ESCRITA] t2 w VAL2 (VAL2 + 5)
+  Valor calculado: 25
+  WTS(VAL2) = 2
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 3
+
+[LEITURA] t3 r SOMA
+  Valor lido: 60 (banco de dados)
+  RTS(SOMA) = 3
+
+[LEITURA] t3 r VAL1
+  Valor lido: 15 (banco de dados)
+  RTS(VAL1) = 3
+
+[ESCRITA] t3 w MEDIA (SOMA / 3)
+  Valor calculado: 20
+  WTS(MEDIA) = 3
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t0 w VAL1 10
+t0 w VAL2 20
+t0 w VAL3 30
+t0 c
+t1 r VAL1
+t1 r VAL2
+t1 r VAL3
+t1 w SOMA (VAL1 + VAL2 + VAL3)
+t1 c
+t2 r VAL1
+t2 w VAL1 (VAL1 + 5)
+t2 r VAL2
+t2 w VAL2 (VAL2 + 5)
+t2 c
+t3 r SOMA
+t3 r VAL1
+t3 w MEDIA (SOMA / 3)
+t3 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+VAL1 = 15
+VAL2 = 25
+VAL3 = 30
+SOMA = 60
+MEDIA = 20
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t0: comitada (TS=0)
+t1: comitada (TS=1)
+t2: comitada (TS=2)
+t3: comitada (TS=3)
+
+
+================================================================================
+
+TESTE 11
+--------------------------------------------------------------------------------
+Nota: Três transações escrevem diretamente em X sem ler antes
+
+HISTÓRIA INICIAL (HI):
+t1 w X 100
+t2 w X 200
+t3 w X 300
+t1 c
+t2 c
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 6
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[ESCRITA] t1 w X 100
+  Valor calculado: 100
+  WTS(X) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[ESCRITA] t2 w X 200
+  Valor calculado: 200
+  WTS(X) = 1
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 2
+
+[ESCRITA] t3 w X 300
+  Valor calculado: 300
+  WTS(X) = 2
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 w X 100
+t2 w X 200
+t3 w X 300
+t1 c
+t2 c
+t3 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 300
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+t3: comitada (TS=2)
+
+
+================================================================================
+
+TESTE 12
+--------------------------------------------------------------------------------
+Nota: Dependência circular: t1 lê X e escreve Y, t2 lê Y e escreve X
+
+HISTÓRIA INICIAL (HI):
+t1 r X
+t2 r Y
+t1 w Y 100
+t2 w X 200
+t1 c
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 6
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r Y
+  Valor lido: 0 (banco de dados)
+  RTS(Y) = 1
+
+[ESCRITA] t1 w Y 100
+  ABORT: TS(t1)=0 < RTS(Y)=1
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t1 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[ESCRITA] t2 w X 200
+  Valor calculado: 200
+  WTS(X) = 1
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada (REINÍCIO após abort)
+  TS(t1) = 2
+
+[LEITURA] t1 r X
+  Valor lido: 200 (banco de dados)
+  RTS(X) = 2
+
+[ESCRITA] t1 w Y 100
+  Valor calculado: 100
+  WTS(Y) = 2
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t2 r Y
+t2 w X 200
+t2 c
+t1 r X
+t1 w Y 100
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 200
+Y = 100
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t2: comitada (TS=1)
+t1: comitada (TS=2)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t1 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 13
+--------------------------------------------------------------------------------
+Nota: Três transações leem diferentes combinações de A, B, C e escrevem D, E, F
+
+HISTÓRIA INICIAL (HI):
+t1 r A
+t1 r B
+t2 r B
+t2 r C
+t3 r C
+t3 r A
+t1 w D (A + B)
+t2 w E (B + C)
+t3 w F (C + A)
+t1 c
+t2 c
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 12
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 0
+
+[LEITURA] t1 r B
+  Valor lido: 0 (banco de dados)
+  RTS(B) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r B
+  Valor lido: 0 (banco de dados)
+  RTS(B) = 1
+
+[LEITURA] t2 r C
+  Valor lido: 0 (banco de dados)
+  RTS(C) = 1
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 2
+
+[LEITURA] t3 r C
+  Valor lido: 0 (banco de dados)
+  RTS(C) = 2
+
+[LEITURA] t3 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 2
+
+[ESCRITA] t1 w D (A + B)
+  Valor calculado: 0
+  WTS(D) = 0
+
+[ESCRITA] t2 w E (B + C)
+  Valor calculado: 0
+  WTS(E) = 1
+
+[ESCRITA] t3 w F (C + A)
+  Valor calculado: 0
+  WTS(F) = 2
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 r A
+t1 r B
+t2 r B
+t2 r C
+t3 r C
+t3 r A
+t1 w D (A + B)
+t2 w E (B + C)
+t3 w F (C + A)
+t1 c
+t2 c
+t3 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+A = 0
+B = 0
+C = 0
+D = 0
+E = 0
+F = 0
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+t3: comitada (TS=2)
+
+
+================================================================================
+
+TESTE 14
+--------------------------------------------------------------------------------
+Nota: t1 lê PRECO, t2 modifica PRECO e cria TAXA, depois t1 tenta usar ambos
+
+HISTÓRIA INICIAL (HI):
+t0 w PRECO 100
+t0 c
+t1 r PRECO
+t2 r PRECO
+t2 w PRECO (PRECO + 50)
+t2 w TAXA 10
+t2 c
+t1 r TAXA
+t1 w TOTAL (PRECO + TAXA)
+t1 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 10
+
+[NOVA TRANSAÇÃO] t0 iniciada
+  TS(t0) = 0
+
+[ESCRITA] t0 w PRECO 100
+  Valor calculado: 100
+  WTS(PRECO) = 0
+
+[COMMIT] t0
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r PRECO
+  Valor lido: 100 (banco de dados)
+  RTS(PRECO) = 1
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 2
+
+[LEITURA] t2 r PRECO
+  Valor lido: 100 (banco de dados)
+  RTS(PRECO) = 2
+
+[ESCRITA] t2 w PRECO (PRECO + 50)
+  Valor calculado: 150
+  WTS(PRECO) = 2
+
+[ESCRITA] t2 w TAXA 10
+  Valor calculado: 10
+  WTS(TAXA) = 2
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[LEITURA] t1 r TAXA
+  ABORT: TS(t1)=1 < WTS(TAXA)=2
+  Motivo: Leitura tardia detectada!
+
+[REINÍCIO] Transação t1 será reiniciada
+  Operações removidas da HF
+  Todas as 4 operações adicionadas ao final da fila
+
+[NOVA TRANSAÇÃO] t1 iniciada (REINÍCIO após abort)
+  TS(t1) = 3
+
+[LEITURA] t1 r PRECO
+  Valor lido: 150 (banco de dados)
+  RTS(PRECO) = 3
+
+[LEITURA] t1 r TAXA
+  Valor lido: 10 (banco de dados)
+  RTS(TAXA) = 3
+
+[ESCRITA] t1 w TOTAL (PRECO + TAXA)
+  Valor calculado: 160
+  WTS(TOTAL) = 3
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t0 w PRECO 100
+t0 c
+t2 r PRECO
+t2 w PRECO (PRECO + 50)
+t2 w TAXA 10
+t2 c
+t1 r PRECO
+t1 r TAXA
+t1 w TOTAL (PRECO + TAXA)
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+PRECO = 150
+TAXA = 10
+TOTAL = 160
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t0: comitada (TS=0)
+t2: comitada (TS=2)
+t1: comitada (TS=3)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t1 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 15
+--------------------------------------------------------------------------------
+Nota: t1 lê e escreve X múltiplas vezes (testa memória local), depois t2 lê X
+
+HISTÓRIA INICIAL (HI):
+t1 r X
+t1 w X (X + 10)
+t1 r X
+t1 w X (X * 2)
+t1 c
+t2 r X
+t2 w Y (X + 5)
+t2 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 8
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 0
+
+[ESCRITA] t1 w X (X + 10)
+  Valor calculado: 10
+  WTS(X) = 0
+
+[LEITURA] t1 r X
+  Valor lido: 10 (memória local)
+  RTS(X) = 0
+
+[ESCRITA] t1 w X (X * 2)
+  Valor calculado: 20
+  WTS(X) = 0
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r X
+  Valor lido: 20 (banco de dados)
+  RTS(X) = 1
+
+[ESCRITA] t2 w Y (X + 5)
+  Valor calculado: 25
+  WTS(Y) = 1
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 r X
+t1 w X (X + 10)
+t1 r X
+t1 w X (X * 2)
+t1 c
+t2 r X
+t2 w Y (X + 5)
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 20
+Y = 25
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+
+
+================================================================================
+
+TESTE 16
+--------------------------------------------------------------------------------
+Nota: Três transações leem A, depois escrevem em B, A e C respectivamente
+
+HISTÓRIA INICIAL (HI):
+t1 r A
+t2 r A
+t3 r A
+t1 w B (A + 10)
+t2 w A (A + 20)
+t3 w C (A + 30)
+t1 c
+t2 c
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 9
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 0
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 1
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 2
+
+[LEITURA] t3 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 2
+
+[ESCRITA] t1 w B (A + 10)
+  Valor calculado: 10
+  WTS(B) = 0
+
+[ESCRITA] t2 w A (A + 20)
+  ABORT: TS(t2)=1 < RTS(A)=2
+  Motivo: Escrita tardia (após leitura)!
+
+[REINÍCIO] Transação t2 será reiniciada
+  Operações removidas da HF
+  Todas as 3 operações adicionadas ao final da fila
+
+[ESCRITA] t3 w C (A + 30)
+  Valor calculado: 30
+  WTS(C) = 2
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada (REINÍCIO após abort)
+  TS(t2) = 3
+
+[LEITURA] t2 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 3
+
+[ESCRITA] t2 w A (A + 20)
+  Valor calculado: 20
+  WTS(A) = 3
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 r A
+t3 r A
+t1 w B (A + 10)
+t3 w C (A + 30)
+t1 c
+t3 c
+t2 r A
+t2 w A (A + 20)
+t2 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+A = 20
+B = 10
+C = 30
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t3: comitada (TS=2)
+t2: comitada (TS=3)
+
+=== TRANSAÇÕES QUE ABORTARAM ===
+t2 - 1 reinício(s)
+
+
+================================================================================
+
+TESTE 17
+--------------------------------------------------------------------------------
+Nota: Três transações calculam diferentes expressões matemáticas com X, Y, Z
+
+HISTÓRIA INICIAL (HI):
+t0 w X 10
+t0 w Y 20
+t0 w Z 30
+t0 c
+t1 r X
+t1 r Y
+t1 w RESULT1 (X * Y + 100)
+t1 c
+t2 r Y
+t2 r Z
+t2 w RESULT2 ((Y + Z) * 2)
+t2 c
+t3 r X
+t3 r Z
+t3 w RESULT3 (X * 10 - Z)
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 16
+
+[NOVA TRANSAÇÃO] t0 iniciada
+  TS(t0) = 0
+
+[ESCRITA] t0 w X 10
+  Valor calculado: 10
+  WTS(X) = 0
+
+[ESCRITA] t0 w Y 20
+  Valor calculado: 20
+  WTS(Y) = 0
+
+[ESCRITA] t0 w Z 30
+  Valor calculado: 30
+  WTS(Z) = 0
+
+[COMMIT] t0
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r X
+  Valor lido: 10 (banco de dados)
+  RTS(X) = 1
+
+[LEITURA] t1 r Y
+  Valor lido: 20 (banco de dados)
+  RTS(Y) = 1
+
+[ESCRITA] t1 w RESULT1 (X * Y + 100)
+  Valor calculado: 300
+  WTS(RESULT1) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 2
+
+[LEITURA] t2 r Y
+  Valor lido: 20 (banco de dados)
+  RTS(Y) = 2
+
+[LEITURA] t2 r Z
+  Valor lido: 30 (banco de dados)
+  RTS(Z) = 2
+
+[ESCRITA] t2 w RESULT2 ((Y + Z) * 2)
+  Valor calculado: 100
+  WTS(RESULT2) = 2
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 3
+
+[LEITURA] t3 r X
+  Valor lido: 10 (banco de dados)
+  RTS(X) = 3
+
+[LEITURA] t3 r Z
+  Valor lido: 30 (banco de dados)
+  RTS(Z) = 3
+
+[ESCRITA] t3 w RESULT3 (X * 10 - Z)
+  Valor calculado: 70
+  WTS(RESULT3) = 3
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t0 w X 10
+t0 w Y 20
+t0 w Z 30
+t0 c
+t1 r X
+t1 r Y
+t1 w RESULT1 (X * Y + 100)
+t1 c
+t2 r Y
+t2 r Z
+t2 w RESULT2 ((Y + Z) * 2)
+t2 c
+t3 r X
+t3 r Z
+t3 w RESULT3 (X * 10 - Z)
+t3 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 10
+Y = 20
+Z = 30
+RESULT1 = 300
+RESULT2 = 100
+RESULT3 = 70
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t0: comitada (TS=0)
+t1: comitada (TS=1)
+t2: comitada (TS=2)
+t3: comitada (TS=3)
+
+
+================================================================================
+
+TESTE 18
+--------------------------------------------------------------------------------
+Nota: t2 lê e comita X antes de t1 tentar escrever
+
+HISTÓRIA INICIAL (HI):
+t2 r X
+t2 c
+t1 w X 100
+t1 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 4
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 0
+
+[LEITURA] t2 r X
+  Valor lido: 0 (banco de dados)
+  RTS(X) = 0
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[ESCRITA] t1 w X 100
+  Valor calculado: 100
+  WTS(X) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t2 r X
+t2 c
+t1 w X 100
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 100
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t2: comitada (TS=0)
+t1: comitada (TS=1)
+
+
+================================================================================
+
+TESTE 19
+--------------------------------------------------------------------------------
+Nota: t2 escreve e comita X antes de t1 tentar ler
+
+HISTÓRIA INICIAL (HI):
+t2 w X 100
+t2 c
+t1 r X
+t1 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 4
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 0
+
+[ESCRITA] t2 w X 100
+  Valor calculado: 100
+  WTS(X) = 0
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 1
+
+[LEITURA] t1 r X
+  Valor lido: 100 (banco de dados)
+  RTS(X) = 1
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t2 w X 100
+t2 c
+t1 r X
+t1 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+X = 100
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t2: comitada (TS=0)
+t1: comitada (TS=1)
+
+
+================================================================================
+
+TESTE 20
+--------------------------------------------------------------------------------
+Nota: Três transações isoladas operando em variáveis diferentes (A, B, C)
+
+HISTÓRIA INICIAL (HI):
+t1 r A
+t1 w A (A + 10)
+t1 c
+t2 r B
+t2 w B (B + 20)
+t2 c
+t3 r C
+t3 w C (C + 30)
+t3 c
+
+RESULTADO:
+=== INICIANDO ESCALONAMENTO ===
+Total de operações na HI: 9
+
+[NOVA TRANSAÇÃO] t1 iniciada
+  TS(t1) = 0
+
+[LEITURA] t1 r A
+  Valor lido: 0 (banco de dados)
+  RTS(A) = 0
+
+[ESCRITA] t1 w A (A + 10)
+  Valor calculado: 10
+  WTS(A) = 0
+
+[COMMIT] t1
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t2 iniciada
+  TS(t2) = 1
+
+[LEITURA] t2 r B
+  Valor lido: 0 (banco de dados)
+  RTS(B) = 1
+
+[ESCRITA] t2 w B (B + 20)
+  Valor calculado: 20
+  WTS(B) = 1
+
+[COMMIT] t2
+  Transação finalizada com sucesso
+
+[NOVA TRANSAÇÃO] t3 iniciada
+  TS(t3) = 2
+
+[LEITURA] t3 r C
+  Valor lido: 0 (banco de dados)
+  RTS(C) = 2
+
+[ESCRITA] t3 w C (C + 30)
+  Valor calculado: 30
+  WTS(C) = 2
+
+[COMMIT] t3
+  Transação finalizada com sucesso
+
+
+=== HISTÓRIA FINAL (HF) ===
+t1 r A
+t1 w A (A + 10)
+t1 c
+t2 r B
+t2 w B (B + 20)
+t2 c
+t3 r C
+t3 w C (C + 30)
+t3 c
+
+=== ESTADO FINAL DO BANCO DE DADOS ===
+A = 10
+B = 20
+C = 30
+
+=== INFORMAÇÕES DAS TRANSAÇÕES ===
+t1: comitada (TS=0)
+t2: comitada (TS=1)
+t3: comitada (TS=2)
+
+
+================================================================================
+
